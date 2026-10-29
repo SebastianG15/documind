@@ -67,12 +67,16 @@ def generate_sample_invoice(angle: float = 6.5, width: int = 900, height: int = 
     return image
 
 
-def run_pipeline(input_path: str | None = None, output_dir: str = "output_demo") -> None:
+def run_pipeline(
+    input_path: str | None = None,
+    output_dir: str = "output_demo",
+    min_confidence: float = 0.20,
+) -> None:
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
     preprocessor = DocumentPreprocessor(target_dpi=300, enable_clahe=True)
-    ocr_engine = SpatialOCREngine(min_confidence=0.25)
+    ocr_engine = SpatialOCREngine(min_confidence=min_confidence)
 
     print("=================================================================")
     print("      DOCUMIND FINANCIAL AI - DEMOSTRACION DE PIPELINE          ")
@@ -131,6 +135,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Demo del Pipeline de Vision y OCR de DocuMind Financial AI")
     parser.add_argument("--input", "-i", type=str, default=None, help="Ruta a PDF o imagen para procesar (opcional)")
     parser.add_argument("--outdir", "-o", type=str, default="output_demo", help="Directorio para guardar imagenes procesadas")
+    parser.add_argument("--conf", "-c", type=float, default=0.15, help="Umbral minimo de confianza OCR (default: 0.15)")
     args = parser.parse_args()
 
-    run_pipeline(input_path=args.input, output_dir=args.outdir)
+    run_pipeline(input_path=args.input, output_dir=args.outdir, min_confidence=args.conf)
