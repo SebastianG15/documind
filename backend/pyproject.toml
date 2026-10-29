@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn>=0.30.0",
     "pypdfium2>=4.30.0",
     "easyocr>=1.7.0",
+    "sentence-transformers>=3.0.0",
     "pytest>=8.3.0",
 ]
 
