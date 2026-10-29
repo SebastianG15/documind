@@ -1,0 +1,29 @@
+[project]
+name = "documind-financial-ai"
+version = "0.1.0"
+description = "Motor de Inteligencia Documental y Cotejo de 3 Vías para Expedientes Financieros"
+authors = [
+    {name = "Mario Sebastian Gilian Alayo", email = "sebastiangilian7@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "torch>=2.4.0",
+    "torchvision>=0.19.0",
+    "torchaudio>=2.4.0",
+    "sqlalchemy>=2.0.30",
+    "pgvector>=0.3.0",
+    "psycopg2-binary>=2.9.9",
+    "alembic>=1.13.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "opencv-python-headless>=4.10.0",
+    "numpy>=1.26.0",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.112.0",
+    "uvicorn>=0.30.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
