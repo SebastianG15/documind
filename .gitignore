@@ -47,7 +47,8 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Databases, Volume data & uploads
-data/
+data/*
+!data/samples/
 volumes/
 uploads/
 output_demo/
