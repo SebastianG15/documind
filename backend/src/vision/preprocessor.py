@@ -1,5 +1,18 @@
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Union
 import cv2
 import numpy as np
+import pypdfium2 as pdfium
+
+
+@dataclass
+class ProcessedPage:
+    page_number: int
+    image: np.ndarray
+    original_skew_angle: float
+    width: int
+    height: int
 
 
 def detect_skew_angle(image: np.ndarray, max_angle: float = 45.0) -> float:
@@ -70,14 +83,12 @@ def rotate_image(
     # Negative angle counter-rotates the skewed document to upright orientation
     rotation_matrix = cv2.getRotationMatrix2D(center, -angle, 1.0)
 
-    # Calculate bounding box dimensions of the rotated image to avoid clipping corners
     cos_val = abs(rotation_matrix[0, 0])
     sin_val = abs(rotation_matrix[0, 1])
 
     new_w = int((h * sin_val) + (w * cos_val))
     new_h = int((h * cos_val) + (w * sin_val))
 
-    # Adjust transformation matrix to account for translation
     rotation_matrix[0, 2] += (new_w / 2.0) - center[0]
     rotation_matrix[1, 2] += (new_h / 2.0) - center[1]
 
@@ -90,3 +101,98 @@ def rotate_image(
         borderValue=border_color,
     )
     return rotated
+
+
+def enhance_contrast(
+    image: np.ndarray,
+    clip_limit: float = 2.0,
+    tile_grid_size: tuple[int, int] = (8, 8),
+) -> np.ndarray:
+    if len(image.shape) == 3:
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l_channel, a_channel, b_channel = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+        cl = clahe.apply(l_channel)
+        merged = cv2.merge((cl, a_channel, b_channel))
+        return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
+    else:
+        clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+        return clahe.apply(image)
+
+
+def rasterize_pdf(
+    pdf_source: Union[str, Path, bytes],
+    dpi: int = 300,
+) -> list[np.ndarray]:
+    try:
+        if isinstance(pdf_source, (str, Path)):
+            pdf = pdfium.PdfDocument(str(pdf_source))
+        elif isinstance(pdf_source, bytes):
+            pdf = pdfium.PdfDocument(pdf_source)
+        else:
+            raise ValueError("El origen del PDF debe ser una ruta válida o una secuencia de bytes.")
+    except Exception as exc:
+        raise ValueError(f"Error al rasterizar el documento PDF: {exc}") from exc
+
+    scale = dpi / 72.0
+    pages: list[np.ndarray] = []
+    try:
+        for page in pdf:
+            bitmap = page.render(scale=scale)
+            arr = bitmap.to_numpy().copy()
+            pages.append(arr)
+    finally:
+        pdf.close()
+
+    return pages
+
+
+class DocumentPreprocessor:
+    def __init__(
+        self,
+        target_dpi: int = 300,
+        max_skew_angle: float = 45.0,
+        enable_clahe: bool = True,
+    ) -> None:
+        self.target_dpi = target_dpi
+        self.max_skew_angle = max_skew_angle
+        self.enable_clahe = enable_clahe
+
+    def process_image(self, image: np.ndarray, page_number: int = 1) -> ProcessedPage:
+        skew_angle = detect_skew_angle(image, max_angle=self.max_skew_angle)
+        deskewed = rotate_image(image, skew_angle)
+
+        if self.enable_clahe:
+            enhanced = enhance_contrast(deskewed)
+        else:
+            enhanced = deskewed
+
+        h, w = enhanced.shape[:2]
+        return ProcessedPage(
+            page_number=page_number,
+            image=enhanced,
+            original_skew_angle=skew_angle,
+            width=w,
+            height=h,
+        )
+
+    def process_pdf(self, pdf_source: Union[str, Path, bytes]) -> list[ProcessedPage]:
+        raw_pages = rasterize_pdf(pdf_source, dpi=self.target_dpi)
+        processed: list[ProcessedPage] = []
+        for idx, page_img in enumerate(raw_pages, start=1):
+            processed.append(self.process_image(page_img, page_number=idx))
+        return processed
+
+    def process_file(self, file_path: Union[str, Path]) -> list[ProcessedPage]:
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
+
+        if path.suffix.lower() == ".pdf":
+            return self.process_pdf(path)
+
+        image = cv2.imread(str(path))
+        if image is None:
+            raise ValueError(f"No se pudo cargar la imagen desde: {file_path}")
+
+        return [self.process_image(image, page_number=1)]
