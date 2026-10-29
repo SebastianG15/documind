@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Sequence, Union
+import numpy as np
+import torch
 
 
 @dataclass
@@ -47,3 +49,62 @@ def normalize_bbox(
     ymax = max(0, min(target_scale, ymax))
 
     return (ymin, xmin, ymax, xmax)
+
+
+class SpatialOCREngine:
+    def __init__(
+        self,
+        languages: list[str] | None = None,
+        use_gpu: bool | None = None,
+        min_confidence: float = 0.2,
+    ) -> None:
+        self.languages = languages or ["es", "en"]
+        self.use_gpu = torch.cuda.is_available() if use_gpu is None else use_gpu
+        self.min_confidence = min_confidence
+        self._reader = None
+
+    @property
+    def reader(self):
+        if self._reader is None:
+            import easyocr
+            self._reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
+        return self._reader
+
+    def extract_tokens(
+        self,
+        image: np.ndarray,
+        page_number: int = 1,
+    ) -> OCRResult:
+        if image is None or image.size == 0:
+            raise ValueError("La imagen proporcionada para OCR está vacía o es inválida.")
+
+        h, w = image.shape[:2]
+        raw_results = self.reader.readtext(image)
+
+        tokens: list[SpatialToken] = []
+        full_text_parts: list[str] = []
+
+        for bbox_pts, text, confidence in raw_results:
+            clean_text = str(text).strip()
+            if not clean_text or float(confidence) < self.min_confidence:
+                continue
+
+            int_pts = [[int(pt[0]), int(pt[1])] for pt in bbox_pts]
+            normalized = normalize_bbox(int_pts, img_width=w, img_height=h)
+
+            token = SpatialToken(
+                text=clean_text,
+                confidence=float(confidence),
+                bbox=normalized,
+                raw_box=int_pts,
+            )
+            tokens.append(token)
+            full_text_parts.append(clean_text)
+
+        return OCRResult(
+            page_number=page_number,
+            tokens=tokens,
+            full_text=" ".join(full_text_parts),
+            width=w,
+            height=h,
+        )

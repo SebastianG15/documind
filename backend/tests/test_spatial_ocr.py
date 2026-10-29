@@ -1,19 +1,20 @@
+import cv2
+import numpy as np
 import pytest
-from src.vision.spatial_ocr import SpatialToken, OCRResult, normalize_bbox
+
+from src.vision.spatial_ocr import (
+    OCRResult,
+    SpatialOCREngine,
+    SpatialToken,
+    normalize_bbox,
+)
 
 
 def test_normalize_bbox_standard_polygon():
-    # Polygon with 4 corners in pixel space (1000x2000 image)
     raw_polygon = [[100, 200], [300, 200], [300, 400], [100, 400]]
     width = 1000
     height = 2000
 
-    # In pixels: x is [100, 300], y is [200, 400]
-    # In normalized [0, 1000]:
-    # xmin = 100 / 1000 * 1000 = 100
-    # xmax = 300 / 1000 * 1000 = 300
-    # ymin = 200 / 2000 * 1000 = 100
-    # ymax = 400 / 2000 * 1000 = 200
     ymin, xmin, ymax, xmax = normalize_bbox(raw_polygon, width, height)
 
     assert ymin == 100
@@ -25,7 +26,6 @@ def test_normalize_bbox_standard_polygon():
 
 
 def test_normalize_bbox_clamps_out_of_bounds():
-    # Polygon with coordinates exceeding image bounds
     raw_polygon = [[-50, -20], [1200, -20], [1200, 2500], [-50, 2500]]
     width = 1000
     height = 2000
@@ -59,3 +59,52 @@ def test_spatial_token_and_ocr_result_dataclasses():
     assert ocr_result.page_number == 1
     assert len(ocr_result.tokens) == 1
     assert ocr_result.full_text == "20481234567"
+
+
+def test_spatial_ocr_extracts_tokens_from_image():
+    # Create synthetic invoice crop with clear printed text
+    image = np.full((300, 800, 3), 255, dtype=np.uint8)
+    cv2.putText(
+        image,
+        "FACTURA F001-4920",
+        (50, 80),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 0, 0),
+        3,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        image,
+        "TOTAL 1500.00",
+        (50, 200),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (0, 0, 0),
+        3,
+        cv2.LINE_AA,
+    )
+
+    ocr_engine = SpatialOCREngine(min_confidence=0.2)
+    result = ocr_engine.extract_tokens(image, page_number=1)
+
+    assert isinstance(result, OCRResult)
+    assert result.page_number == 1
+    assert result.width == 800
+    assert result.height == 300
+    assert len(result.tokens) >= 2
+
+    # Verify all bounding boxes are within [0, 1000] and valid
+    for token in result.tokens:
+        ymin, xmin, ymax, xmax = token.bbox
+        assert 0 <= ymin <= ymax <= 1000
+        assert 0 <= xmin <= xmax <= 1000
+
+    assert "FACTURA" in result.full_text.upper() or "TOTAL" in result.full_text.upper()
+
+
+def test_spatial_ocr_empty_image_raises_error():
+    ocr_engine = SpatialOCREngine()
+    empty_image = np.zeros((0, 0, 3), dtype=np.uint8)
+    with pytest.raises(ValueError, match="La imagen proporcionada para OCR está vacía o es inválida"):
+        ocr_engine.extract_tokens(empty_image)
