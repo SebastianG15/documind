@@ -56,11 +56,19 @@ class SpatialOCREngine:
         self,
         languages: list[str] | None = None,
         use_gpu: bool | None = None,
-        min_confidence: float = 0.2,
+        min_confidence: float = 0.15,
+        text_threshold: float = 0.5,
+        link_threshold: float = 0.35,
+        low_text: float = 0.35,
+        mag_ratio: float = 1.0,
     ) -> None:
         self.languages = languages or ["es", "en"]
         self.use_gpu = torch.cuda.is_available() if use_gpu is None else use_gpu
         self.min_confidence = min_confidence
+        self.text_threshold = text_threshold
+        self.link_threshold = link_threshold
+        self.low_text = low_text
+        self.mag_ratio = mag_ratio
         self._reader = None
 
     @property
@@ -79,7 +87,13 @@ class SpatialOCREngine:
             raise ValueError("La imagen proporcionada para OCR está vacía o es inválida.")
 
         h, w = image.shape[:2]
-        raw_results = self.reader.readtext(image)
+        raw_results = self.reader.readtext(
+            image,
+            text_threshold=self.text_threshold,
+            link_threshold=self.link_threshold,
+            low_text=self.low_text,
+            mag_ratio=self.mag_ratio,
+        )
 
         tokens: list[SpatialToken] = []
         full_text_parts: list[str] = []
