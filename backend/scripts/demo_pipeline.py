@@ -10,6 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.vision.preprocessor import DocumentPreprocessor
 from src.vision.spatial_ocr import SpatialOCREngine
+from src.nlp.classifier import DocumentClassifier, DocumentType
+from src.nlp.embeddings import EmbeddingEngine
+from src.nlp.entity_extractor import EntityExtractor
 
 
 def generate_sample_invoice(angle: float = 6.5, width: int = 900, height: int = 1200) -> np.ndarray:
@@ -120,6 +123,43 @@ def run_pipeline(
         print("-" * 70)
         for token in ocr_result.tokens[:10]:
             print(f"{token.text[:30]:<30} | {token.confidence:0.2f}   | {token.bbox}")
+
+        # Comprension Documental y Clasificacion
+        classifier = DocumentClassifier()
+        classification = classifier.classify(ocr_result.full_text)
+        print(f"\n--- Comprension Documental (Fase 3) ---")
+        print(f"Tipo de documento clasificado: {classification.doc_type.value} (Certeza: {classification.confidence*100:.1f}%)")
+        if classification.evidence_tokens:
+            print(f"Evidencia contable detectada:  {', '.join(classification.evidence_tokens)}")
+
+        # Vectorizacion Semantica
+        embedding_engine = EmbeddingEngine()
+        vector = embedding_engine.embed_text(ocr_result.full_text)
+        sample_dims = ", ".join(f"{x:+.3f}" for x in vector[:4])
+        print(f"Vector semantico (pgvector):   {len(vector)}d | Muestra [{sample_dims}, ...] (Norma: {np.linalg.norm(vector):.2f})")
+
+        # Extraccion Estructurada de Entidades Contables
+        extractor = EntityExtractor()
+        if classification.doc_type == DocumentType.INVOICE:
+            invoice = extractor.extract_invoice(ocr_result)
+            print(f"\n--- Extraccion Estructurada (Factura) ---")
+            print(f"Emisor:       {invoice.supplier_name} (RUC: {invoice.supplier_ruc})")
+            print(f"Comprobante:  {invoice.invoice_number} | Fecha: {invoice.issue_date} | Moneda: {invoice.currency}")
+            print(f"Subtotal:     {invoice.subtotal:.2f} | IGV: {invoice.tax_amount:.2f} | Total: {invoice.total_amount:.2f}")
+            if invoice.line_items:
+                print(f"Lineas de items ({len(invoice.line_items)}):")
+                for item in invoice.line_items:
+                    print(f"  - [{item.quantity:g}x] {item.description} (P.U.: {item.unit_price:.2f}) -> {item.line_total:.2f}")
+        elif classification.doc_type == DocumentType.SHIPPING_GUIDE:
+            guide = extractor.extract_shipping_guide(ocr_result)
+            print(f"\n--- Extraccion Estructurada (Guia de Remision) ---")
+            print(f"Guia Nro:     {guide.guide_number} | Remitente: {guide.sender_ruc} | Destinatario: {guide.recipient_ruc}")
+            print(f"Items:        {len(guide.items)} items transportados")
+        elif classification.doc_type == DocumentType.PAYMENT_VOUCHER:
+            voucher = extractor.extract_payment_voucher(ocr_result)
+            print(f"\n--- Extraccion Estructurada (Voucher de Pago) ---")
+            print(f"Banco:        {voucher.bank_name} | Operacion: {voucher.operation_number}")
+            print(f"Monto:        {voucher.currency} {voucher.amount:.2f} | Fecha: {voucher.payment_date}")
 
         # Render annotated image with bounding boxes
         annotated = page.image.copy()
