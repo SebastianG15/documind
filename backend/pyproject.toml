@@ -26,6 +26,7 @@ dependencies = [
     "pypdfium2>=4.30.0",
     "easyocr>=1.7.0",
     "sentence-transformers>=3.0.0",
+    "python-multipart>=0.0.9",
     "pytest>=8.3.0",
 ]
 
