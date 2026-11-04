@@ -1,0 +1,115 @@
+{
+  "timestamp_utc": "2026-11-05T00:26:26.436199+00:00",
+  "hardware": {
+    "os": "Windows 10 (64bit)",
+    "cpu": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+    "python": "3.11.15",
+    "pytorch": "2.6.0+cu124",
+    "cuda_available": true,
+    "gpu_name": "NVIDIA GeForce GTX 1660 Ti",
+    "gpu_capability": "7.5",
+    "gpu_vram_gb": 6.0
+  },
+  "vision_preprocessor": {
+    "iterations": 25,
+    "image_dimensions": "1200x1600",
+    "deskew_mean_ms": 45.79,
+    "deskew_p95_ms": 58.16,
+    "clahe_mean_ms": 20.93,
+    "total_mean_ms": 66.72,
+    "total_p95_ms": 79.26,
+    "throughput_pages_sec": 14.99
+  },
+  "spatial_ocr": {
+    "gpu": {
+      "device": "NVIDIA GeForce GTX 1660 Ti",
+      "iterations": 3,
+      "tokens_extracted": 85,
+      "mean_latency_ms": 2883.05,
+      "median_latency_ms": 2804.63,
+      "p95_latency_ms": 3021.08,
+      "min_latency_ms": 2799.38,
+      "throughput_pages_min": 20.81
+    },
+    "cpu": {
+      "device": "CPU (Intel64 Family 6 Model 167 Stepping 1, GenuineIntel)",
+      "iterations": 3,
+      "tokens_extracted": 85,
+      "mean_latency_ms": 10658.7,
+      "median_latency_ms": 10415.43,
+      "p95_latency_ms": 11311.3,
+      "min_latency_ms": 10149.84,
+      "throughput_pages_min": 5.63
+    },
+    "gpu_speedup_factor": 3.7
+  },
+  "dense_embeddings": {
+    "cuda": {
+      "batch_1": {
+        "batch_size": 1,
+        "mean_latency_ms": 13.48,
+        "latency_per_item_ms": 13.481,
+        "throughput_vectors_sec": 74.2
+      },
+      "batch_8": {
+        "batch_size": 8,
+        "mean_latency_ms": 17.91,
+        "latency_per_item_ms": 2.239,
+        "throughput_vectors_sec": 446.6
+      },
+      "batch_32": {
+        "batch_size": 32,
+        "mean_latency_ms": 24.49,
+        "latency_per_item_ms": 0.765,
+        "throughput_vectors_sec": 1306.7
+      },
+      "batch_64": {
+        "batch_size": 64,
+        "mean_latency_ms": 48.87,
+        "latency_per_item_ms": 0.764,
+        "throughput_vectors_sec": 1309.7
+      }
+    },
+    "cpu": {
+      "batch_1": {
+        "batch_size": 1,
+        "mean_latency_ms": 16.93,
+        "latency_per_item_ms": 16.927,
+        "throughput_vectors_sec": 59.1
+      },
+      "batch_8": {
+        "batch_size": 8,
+        "mean_latency_ms": 41.7,
+        "latency_per_item_ms": 5.213,
+        "throughput_vectors_sec": 191.8
+      },
+      "batch_32": {
+        "batch_size": 32,
+        "mean_latency_ms": 115.97,
+        "latency_per_item_ms": 3.624,
+        "throughput_vectors_sec": 275.9
+      },
+      "batch_64": {
+        "batch_size": 64,
+        "mean_latency_ms": 230.5,
+        "latency_per_item_ms": 3.601,
+        "throughput_vectors_sec": 277.7
+      }
+    }
+  },
+  "three_way_reconciler": {
+    "iterations": 1000,
+    "items_per_invoice": 10,
+    "shipping_guides_count": 2,
+    "payment_vouchers_count": 1,
+    "report_status": "RECONCILED",
+    "math_valid": true,
+    "goods_matched": true,
+    "payment_matched": true,
+    "mean_latency_microseconds": 113.1,
+    "mean_latency_ms": 0.113,
+    "p95_latency_ms": 0.186,
+    "p99_latency_ms": 0.372,
+    "throughput_reconciliations_sec": 8840.2
+  }
+}
