@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1 import api_v1_router
 from src.core.config import settings
+from src.core.security import SecurityHeadersMiddleware
 from src.schemas.api_schemas import HealthResponse
 
 app = FastAPI(
@@ -13,6 +14,9 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Inyectar cabeceras HTTP de seguridad (OWASP Top 10)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Configuracion de CORS para integracion con frontend Next.js
 app.add_middleware(

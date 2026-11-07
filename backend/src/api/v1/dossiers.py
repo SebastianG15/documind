@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
+from src.core.security import validate_and_save_upload_file
 from src.db.base import get_db
 from src.db.models import (
     Document as DBDocument,
@@ -45,20 +46,41 @@ async def upload_dossier(
     if not files:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Debe adjuntar al menos un archivo")
 
+    if len(files) > settings.MAX_FILES_PER_DOSSIER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Se excedio el limite maximo de {settings.MAX_FILES_PER_DOSSIER} archivos por expediente.",
+        )
+
     temp_folder = settings.UPLOAD_DIR / f"temp_{uuid4().hex}"
     temp_folder.mkdir(parents=True, exist_ok=True)
     saved_file_paths: List[Path] = []
 
     try:
+        total_dossier_bytes = 0
         for file in files:
-            safe_filename = Path(file.filename or f"doc_{uuid4().hex}.pdf").name
-            dest_path = temp_folder / safe_filename
-            with dest_path.open("wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            dest_path, file_bytes = await validate_and_save_upload_file(
+                file=file,
+                target_dir=temp_folder,
+                max_file_size=settings.MAX_FILE_SIZE_BYTES,
+            )
+            total_dossier_bytes += file_bytes
+            if total_dossier_bytes > settings.MAX_DOSSIER_SIZE_BYTES:
+                max_total_mb = settings.MAX_DOSSIER_SIZE_BYTES // (1024 * 1024)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"El tamano total del expediente excede el limite de {max_total_mb} MB.",
+                )
             saved_file_paths.append(dest_path)
 
-        # Ejecutar pipeline completo
-        processing_result = pipeline_service.process_dossier_files(saved_file_paths)
+        # Ejecutar pipeline completo con manejo elegante de excepciones
+        try:
+            processing_result = pipeline_service.process_dossier_files(saved_file_paths)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Fallo en el procesamiento de comprobantes: {str(exc)}",
+            )
 
         # Persistir en base de datos PostgreSQL + pgvector
         saved_dossier = pipeline_service.save_to_database(db, title, processing_result)

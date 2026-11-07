@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: Path = Path("uploads")
     PROCESSED_DIR: Path = Path("uploads/processed")
 
+    # Controles de seguridad y limites de cuota de ingesta
+    MAX_FILE_SIZE_BYTES: int = 25 * 1024 * 1024  # 25 MB por archivo
+    MAX_DOSSIER_SIZE_BYTES: int = 75 * 1024 * 1024  # 75 MB por expediente completo
+    MAX_FILES_PER_DOSSIER: int = 10  # Maximo de comprobantes por expediente
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
