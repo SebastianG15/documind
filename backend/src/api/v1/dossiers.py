@@ -68,7 +68,7 @@ async def upload_dossier(
             if total_dossier_bytes > settings.MAX_DOSSIER_SIZE_BYTES:
                 max_total_mb = settings.MAX_DOSSIER_SIZE_BYTES // (1024 * 1024)
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE if hasattr(status, "HTTP_413_CONTENT_TOO_LARGE") else 413,
                     detail=f"El tamano total del expediente excede el limite de {max_total_mb} MB.",
                 )
             saved_file_paths.append(dest_path)
@@ -78,7 +78,7 @@ async def upload_dossier(
             processing_result = pipeline_service.process_dossier_files(saved_file_paths)
         except Exception as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT if hasattr(status, "HTTP_422_UNPROCESSABLE_CONTENT") else 422,
                 detail=f"Fallo en el procesamiento de comprobantes: {str(exc)}",
             )
 

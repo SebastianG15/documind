@@ -140,7 +140,7 @@ async def validate_and_save_upload_file(
                     dest_path.unlink(missing_ok=True)
                     max_mb = max_file_size // (1024 * 1024)
                     raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE if hasattr(status, "HTTP_413_CONTENT_TOO_LARGE") else 413,
                         detail=f"El archivo '{original_name}' excede el tamano maximo permitido de {max_mb} MB.",
                     )
 

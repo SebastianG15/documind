@@ -8,7 +8,7 @@
 ![Next.js 15](https://img.shields.io/badge/Next.js-15.0-black?logo=next.js&logoColor=white)
 ![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-336791?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose%20Ready-2496ED?logo=docker&logoColor=white)
-![CI Pipeline](https://img.shields.io/badge/CI%20Pipeline-Passing%20(51%2F51%20Tests)-brightgreen?logo=github-actions&logoColor=white)
+![CI Pipeline](https://img.shields.io/badge/CI%20Pipeline-Passing%20(61%2F61%20Tests)-brightgreen?logo=github-actions&logoColor=white)
 ![License](https://img.shields.io/badge/License-Proprietary%20%2F%20Enterprise-blue)
 
 ---
@@ -253,7 +253,7 @@ documind/
 │   │   ├── schemas/                   # Esquemas Pydantic v2 de validacion de entrada y salida
 │   │   ├── services/                  # Orquestador del pipeline y motor de busqueda semantica
 │   │   └── vision/                    # Preprocesador OpenCV (Deskewing) y OCR espacial CRAFT
-│   ├── tests/                         # Suite de 51 pruebas automatizadas unitarias e integradas
+│   ├── tests/                         # Suite de 61 pruebas automatizadas unitarias, de seguridad e integradas
 │   ├── benchmark_results.json         # Metricas crudas exportadas de la suite de benchmark
 │   ├── Dockerfile                     # Imagen de produccion backend (Python 3.11 Slim)
 │   ├── pyproject.toml                 # Metadatos del proyecto y configuracion de herramientas
@@ -360,7 +360,7 @@ npm run dev
 El repositorio cuenta con una cobertura integral de pruebas automatizadas que validan cada componente critico del sistema:
 
 ```bash
-# Ejecutar la suite completa de pruebas unitarias e integradas (51 tests)
+# Ejecutar la suite completa de pruebas unitarias, de seguridad e integradas (61 tests)
 cd backend
 pytest tests/ -v
 ```
@@ -368,6 +368,7 @@ pytest tests/ -v
 ### Resumen del Test Suite:
 
 * `tests/test_api_dossiers.py`: Endpoints REST (`/upload`, `/{id}`, `/search`, `/health`), validacion de errores 404/422 y subidas multipart.
+* `tests/test_e2e_resilience.py`: Pruebas de seguridad y resiliencia (mitigacion de Path Traversal, validacion de Magic Bytes binarios, rechazo de extensiones ejecutables, cuotas HTTP 413, degradacion elegante HTTP 422 y cabeceras de proteccion OWASP).
 * `tests/test_nlp_classifier.py`: Clasificacion semantica de facturas, guias, comprobantes bancarios y casos de borde (texto vacio/desconocido).
 * `tests/test_nlp_embeddings.py`: Generacion de vectores unitarios de 384d, ranking de similitud coseno y consistencia dimensional.
 * `tests/test_nlp_extractor.py`: Extraccion de entidades fiscales (RUC, fechas, monedas) y reconstruccion de tablas de items con imputacion de totales.
@@ -382,7 +383,7 @@ pytest tests/ -v
 El archivo `.github/workflows/ci.yml` ejecuta automaticamente ante cada *push* o *pull request* hacia la rama `main`:
 1. Servicio de contenedor de PostgreSQL 16 con `pgvector` activo.
 2. Instalacion de dependencias optimizadas para CPU en entornos de nube.
-3. Ejecucion automatizada de las 51 pruebas con `pytest`.
+3. Ejecucion automatizada de las 61 pruebas con `pytest`.
 4. Compilacion estricta de TypeScript y generacion de rutas estaticas en Next.js (`npm run build`).
 
 ---
