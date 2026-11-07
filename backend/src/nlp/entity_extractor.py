@@ -265,8 +265,28 @@ class EntityExtractor:
         return None
 
     def _extract_line_items_from_tokens(self, tokens: List[SpatialToken]) -> List[LineItemExtraction]:
-        # Filter tokens that belong to the table area (typically ymin between 250 and 450)
-        table_tokens = [t for t in tokens if 270 <= t.bbox[0] <= 420]
+        # Determinar dinamicamente los limites superior e inferior de la tabla
+        header_ymax = [
+            t.bbox[2]
+            for t in tokens
+            if any(k in t.text.upper() for k in ["ITEM", "DESCRIPCION", "CANT", "PRECIO", "U.M.", "P.UNIT", "CODIGO"])
+            and t.bbox[0] < 350
+        ]
+        min_y = max(header_ymax) if header_ymax else 220
+
+        footer_ymin = [
+            t.bbox[0]
+            for t in tokens
+            if any(k in t.text.upper() for k in ["SUBTOTAL", "TOTAL FACTURA", "TOTAL A PAGAR", "IGV", "IMPORTE TOTAL", "SON:"])
+            and t.bbox[0] > min_y
+        ]
+        max_y = min(footer_ymin) if footer_ymin else 750
+
+        table_tokens = [
+            t for t in tokens
+            if min_y <= t.bbox[0] < max_y
+            and not any(k in t.text.upper() for k in ["SUBTOTAL", "IGV", "TOTAL FACTURA", "TOTAL A PAGAR"])
+        ]
         if not table_tokens:
             return []
 
@@ -330,7 +350,34 @@ class EntityExtractor:
         return line_items
 
     def _extract_guide_items(self, tokens: List[SpatialToken]) -> List[LineItemExtraction]:
-        table_tokens = [t for t in tokens if 300 <= t.bbox[0] <= 450]
+        # Determinar dinamicamente limites excluyendo cabeceras, direcciones y sellos
+        header_ymax = [
+            t.bbox[2]
+            for t in tokens
+            if any(k in t.text.upper() for k in ["ITEM", "DESCRIPCION", "CANTIDAD", "CODIGO", "U.M.", "PUNTO DE LLEGADA", "PUNTO DE PARTIDA"])
+            and t.bbox[0] < 350
+        ]
+        min_y = max(header_ymax) if header_ymax else 250
+
+        footer_ymin = [
+            t.bbox[0]
+            for t in tokens
+            if any(k in t.text.upper() for k in ["CONTROL DE ALMACEN", "MERCADERIA RECIBIDA", "CONFORMIDAD", "OBSERVACIONES", "FIRMA", "SELLO"])
+            and t.bbox[0] > min_y
+        ]
+        max_y = min(footer_ymin) if footer_ymin else 750
+
+        excluded_keywords = [
+            "PUNTO DE", "PARTIDA", "LLEGADA", "RUC", "DESTINATARIO", "REMITENTE",
+            "FECHA", "MOTIVO", "CONTROL DE ALMACEN", "MERCADERIA RECIBIDA",
+            "CONFORMIDAD", "FIRMA", "SELLO", "GUIA DE REMISION", "TRANSPORTE LOGISTICO",
+        ]
+
+        table_tokens = [
+            t for t in tokens
+            if min_y <= t.bbox[0] < max_y
+            and not any(k in t.text.upper() for k in excluded_keywords)
+        ]
         if not table_tokens:
             return []
 
@@ -360,7 +407,10 @@ class EntityExtractor:
                     if not tok.text.isdigit():
                         desc_parts.append(tok.text)
 
-            desc = " ".join(desc_parts).strip() or "ITEM TRANSPORTADO"
+            desc = " ".join(desc_parts).strip()
+            if not desc or len(desc) < 3 or any(k in desc.upper() for k in excluded_keywords):
+                continue
+
             ymin = min(t.bbox[0] for t in row)
             xmin = min(t.bbox[1] for t in row)
             ymax = max(t.bbox[2] for t in row)
