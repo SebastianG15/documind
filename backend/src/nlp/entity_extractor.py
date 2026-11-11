@@ -304,27 +304,43 @@ class EntityExtractor:
             if not placed:
                 rows.append([tok])
 
+        unit_words = {"UND", "UNID", "BAL", "KG", "LT", "GLN", "M", "PZA", "CJ", "UM", "U.M."}
         line_items: List[LineItemExtraction] = []
         for row in rows:
             row_sorted = sorted(row, key=lambda t: t.bbox[1])
             # A valid item row usually has at least 3 parts: description/item, qty/price, total
             numbers: List[Tuple[float, SpatialToken]] = []
-            text_tokens: List[SpatialToken] = []
+            desc_parts: List[str] = []
 
             for tok in row_sorted:
                 clean_text = tok.text.replace(",", "").strip()
+                if clean_text.upper() in unit_words:
+                    continue
                 try:
                     val = float(clean_text)
                     numbers.append((val, tok))
                 except ValueError:
-                    if not clean_text.isdigit():
-                        text_tokens.append(tok)
+                    inline_decimals = re.findall(r"\b\d+(?:,\d{3})*\.\d{2}\b", tok.text)
+                    for dec_str in inline_decimals:
+                        try:
+                            numbers.append((float(dec_str.replace(",", "")), tok))
+                        except ValueError:
+                            pass
+                    cleaned_part = re.sub(r"\b\d+(?:,\d{3})*\.\d{2}\b", "", tok.text)
+                    cleaned_part = re.sub(r"^\s*0\d{1,2}\b", "", cleaned_part)
+                    cleaned_part = re.sub(r"\bCOD-[A-Z0-9-]+\b", "", cleaned_part, flags=re.IGNORECASE)
+                    cleaned_part = re.sub(
+                        r"\b(?:UND|UNID|BAL|KG|LT|GLN|PZA|CJ|U\.?M\.?)\b\.?", "", cleaned_part, flags=re.IGNORECASE
+                    )
+                    cleaned_part = " ".join(cleaned_part.split()).strip()
+                    if cleaned_part and not cleaned_part.isdigit():
+                        desc_parts.append(cleaned_part)
 
-            if len(numbers) >= 3 and text_tokens:
+            if len(numbers) >= 3 and desc_parts:
                 qty = numbers[-3][0]
                 price = numbers[-2][0]
                 total = numbers[-1][0]
-                desc = " ".join(t.text for t in text_tokens)
+                desc = " ".join(desc_parts)
 
                 # Merge bbox
                 ymin = min(t.bbox[0] for t in row)
@@ -362,7 +378,7 @@ class EntityExtractor:
         footer_ymin = [
             t.bbox[0]
             for t in tokens
-            if any(k in t.text.upper() for k in ["CONTROL DE ALMACEN", "MERCADERIA RECIBIDA", "CONFORMIDAD", "OBSERVACIONES", "FIRMA", "SELLO"])
+            if any(k in t.text.upper() for k in ["CONTROL DE ALMACEN", "MERCADERIA RECIBIDA", "CONFORMIDAD", "OBSERVACIONES", "FIRMA", "SELLO", "RECEPCION PARCIAL"])
             and t.bbox[0] > min_y
         ]
         max_y = min(footer_ymin) if footer_ymin else 750
@@ -371,6 +387,7 @@ class EntityExtractor:
             "PUNTO DE", "PARTIDA", "LLEGADA", "RUC", "DESTINATARIO", "REMITENTE",
             "FECHA", "MOTIVO", "CONTROL DE ALMACEN", "MERCADERIA RECIBIDA",
             "CONFORMIDAD", "FIRMA", "SELLO", "GUIA DE REMISION", "TRANSPORTE LOGISTICO",
+            "RECEPCION PARCIAL", "FALTANTE",
         ]
 
         table_tokens = [
@@ -392,6 +409,7 @@ class EntityExtractor:
             if not placed:
                 rows.append([tok])
 
+        unit_words = {"UND", "UNID", "BAL", "KG", "LT", "GLN", "M", "PZA", "CJ", "UM", "U.M."}
         items: List[LineItemExtraction] = []
         for row in rows:
             row_sorted = sorted(row, key=lambda t: t.bbox[1])
@@ -399,13 +417,29 @@ class EntityExtractor:
             qty = 1.0
 
             for tok in row_sorted:
+                clean_tok = tok.text.replace(",", "").strip()
+                if clean_tok.upper() in unit_words:
+                    continue
                 try:
-                    val = float(tok.text.replace(",", "").strip())
-                    if val > 0:
+                    val = float(clean_tok)
+                    if val > 0 and not (clean_tok.startswith("0") and clean_tok.isdigit()):
                         qty = val
                 except ValueError:
-                    if not tok.text.isdigit():
-                        desc_parts.append(tok.text)
+                    inline_decimals = re.findall(r"\b\d+(?:,\d{3})*\.\d{2}\b", tok.text)
+                    if inline_decimals:
+                        try:
+                            qty = float(inline_decimals[-1].replace(",", ""))
+                        except ValueError:
+                            pass
+                    cleaned_part = re.sub(r"\b\d+(?:,\d{3})*\.\d{2}\b", "", tok.text)
+                    cleaned_part = re.sub(r"^\s*0\d{1,2}\b", "", cleaned_part)
+                    cleaned_part = re.sub(r"\bCOD-[A-Z0-9-]+\b", "", cleaned_part, flags=re.IGNORECASE)
+                    cleaned_part = re.sub(
+                        r"\b(?:UND|UNID|BAL|KG|LT|GLN|PZA|CJ|U\.?M\.?)\b\.?", "", cleaned_part, flags=re.IGNORECASE
+                    )
+                    cleaned_part = " ".join(cleaned_part.split()).strip()
+                    if cleaned_part and not cleaned_part.isdigit():
+                        desc_parts.append(cleaned_part)
 
             desc = " ".join(desc_parts).strip()
             if not desc or len(desc) < 3 or any(k in desc.upper() for k in excluded_keywords):

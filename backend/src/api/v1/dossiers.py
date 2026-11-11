@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
@@ -19,6 +20,7 @@ from src.db.models import (
 from src.schemas.api_schemas import (
     DocumentDetail,
     DossierDetailResponse,
+    DossierSummaryItem,
     DossierUploadResponse,
     ExtractionItem,
     LineItemDetail,
@@ -101,6 +103,51 @@ async def upload_dossier(
         shutil.rmtree(temp_folder, ignore_errors=True)
 
 
+@router.get("", response_model=List[DossierSummaryItem])
+def list_dossiers(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Lista los expedientes contables procesados mas recientes con su resumen de auditoria."""
+    dossiers = db.query(DBDossier).order_by(DBDossier.created_at.desc()).limit(limit).all()
+    result: List[DossierSummaryItem] = []
+
+    for d in dossiers:
+        doc_types = [doc.doc_type.value for doc in d.documents]
+        math_valid = False
+        goods_matched = False
+        payment_matched = False
+        summary = ""
+        disc_count = 0
+
+        if d.reconciliation_results:
+            rec = d.reconciliation_results[0]
+            math_valid = rec.math_valid
+            goods_matched = rec.goods_matched
+            payment_matched = rec.payment_matched
+            details = rec.discrepancy_details or {}
+            summary = details.get("summary", "")
+            disc_count = len(details.get("discrepancies", []))
+
+        result.append(
+            DossierSummaryItem(
+                id=d.id,
+                title=d.title,
+                status=d.status.value,
+                created_at=d.created_at,
+                documents_count=len(d.documents),
+                doc_types=doc_types,
+                math_valid=math_valid,
+                goods_matched=goods_matched,
+                payment_matched=payment_matched,
+                summary=summary,
+                discrepancies_count=disc_count,
+            )
+        )
+
+    return result
+
+
 @router.get("/{dossier_id}", response_model=DossierDetailResponse)
 def get_dossier_detail(dossier_id: UUID, db: Session = Depends(get_db)):
     """Obtiene el detalle completo de un expediente contable con sus documentos, items y resultado de cotejo."""
@@ -172,7 +219,10 @@ def get_page_image(dossier_id: UUID, page_id: UUID, db: Session = Depends(get_db
     page = (
         db.query(DBDocumentPage)
         .join(DBDocument, DBDocumentPage.document_id == DBDocument.id)
-        .filter(DBDocument.dossier_id == dossier_id, DBDocumentPage.id == page_id)
+        .filter(
+            DBDocument.dossier_id == dossier_id,
+            or_(DBDocumentPage.id == page_id, DBDocument.id == page_id),
+        )
         .first()
     )
     if not page or not Path(page.image_path).exists():

@@ -85,3 +85,18 @@ class DossierUploadResponse(BaseModel):
     math_valid: bool
     goods_matched: bool
     payment_matched: bool
+
+
+class DossierSummaryItem(BaseModel):
+    id: UUID
+    title: str
+    status: str
+    created_at: datetime
+    documents_count: int = 0
+    doc_types: List[str] = []
+    math_valid: bool = False
+    goods_matched: bool = False
+    payment_matched: bool = False
+    summary: str = ""
+    discrepancies_count: int = 0
+

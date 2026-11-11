@@ -204,13 +204,16 @@ class PipelineService:
                 )
                 db.add(db_page)
 
+            # Consolidar tokens del documento para ubicar coordenadas (bbox) de cada campo
+            doc_tokens = [tok for pr in doc.pages for tok in pr.ocr_result.tokens]
+
             # Guardar extracciones
             if isinstance(doc.extraction, InvoiceExtraction):
-                self._save_invoice_extractions(db, db_doc.id, doc.extraction)
+                self._save_invoice_extractions(db, db_doc.id, doc.extraction, doc_tokens)
             elif isinstance(doc.extraction, ShippingGuideExtraction):
-                self._save_guide_extractions(db, db_doc.id, doc.extraction)
+                self._save_guide_extractions(db, db_doc.id, doc.extraction, doc_tokens)
             elif isinstance(doc.extraction, PaymentVoucherExtraction):
-                self._save_voucher_extractions(db, db_doc.id, doc.extraction)
+                self._save_voucher_extractions(db, db_doc.id, doc.extraction, doc_tokens)
 
         # Guardar resultado de reconciliacion
         rep = processing_result.reconciliation_report
@@ -227,7 +230,141 @@ class PipelineService:
 
         return dossier
 
-    def _save_invoice_extractions(self, db: Session, doc_id: uuid.UUID, inv: InvoiceExtraction) -> None:
+    def _merge_row_bbox(self, anchor, tokens) -> dict:
+        row_toks = [t for t in tokens if abs(t.bbox[0] - anchor.bbox[0]) <= 16]
+        return {
+            "ymin": int(min(t.bbox[0] for t in row_toks)),
+            "xmin": int(min(t.bbox[1] for t in row_toks)),
+            "ymax": int(max(t.bbox[2] for t in row_toks)),
+            "xmax": int(max(t.bbox[3] for t in row_toks)),
+        }
+
+    def _resolve_field_bbox(self, field_name: str, field_value: str, tokens) -> Optional[dict]:
+        if not tokens or not field_value:
+            return None
+
+        val_upper = str(field_value).strip().upper()
+
+        if field_name in ("SUPPLIER_RUC", "SENDER_RUC", "RECIPIENT_RUC"):
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if val_upper in t_up or "RUC" in t_up:
+                    ymin, xmin, ymax, xmax = tok.bbox
+                    if "REMITENTE" in t_up and "DESTINATARIO" in t_up:
+                        mid = xmin + int((xmax - xmin) * 0.49)
+                        if field_name == "SENDER_RUC":
+                            return {"ymin": int(ymin), "xmin": int(xmin), "ymax": int(ymax), "xmax": mid}
+                        if field_name == "RECIPIENT_RUC":
+                            return {"ymin": int(ymin), "xmin": mid + 8, "ymax": int(ymax), "xmax": int(xmax)}
+                    if " - " in t_up and val_upper in t_up.split(" - ")[0]:
+                        return {
+                            "ymin": int(ymin),
+                            "xmin": int(xmin),
+                            "ymax": int(ymax),
+                            "xmax": xmin + int((xmax - xmin) * 0.44),
+                        }
+                    if val_upper in t_up:
+                        return {"ymin": int(ymin), "xmin": int(xmin), "ymax": int(ymax), "xmax": int(xmax)}
+
+        if field_name in ("SUPPLIER_NAME", "BANK_NAME"):
+            keywords = [w for w in val_upper.split() if len(w) >= 3][:2]
+            for tok in sorted(tokens, key=lambda t: t.bbox[0]):
+                t_up = tok.text.upper()
+                if tok.bbox[0] < 220 and any(k in t_up for k in keywords):
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name in ("INVOICE_NUMBER", "GUIDE_NUMBER", "OPERATION_NUMBER"):
+            label_keys = {
+                "INVOICE_NUMBER": ["FACTURA", val_upper],
+                "GUIDE_NUMBER": ["GUIA DE REMISION", val_upper],
+                "OPERATION_NUMBER": ["NUMERO DE OPERACION", "NRO. OP", val_upper],
+            }[field_name]
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if val_upper in t_up or any(k in t_up for k in label_keys):
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name in ("ISSUE_DATE", "PAYMENT_DATE"):
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if "FECHA" in t_up or val_upper in t_up:
+                    ymin, xmin, ymax, xmax = tok.bbox
+                    if "MONEDA" in t_up:
+                        return {
+                            "ymin": int(ymin),
+                            "xmin": int(xmin),
+                            "ymax": int(ymax),
+                            "xmax": xmin + int((xmax - xmin) * 0.50),
+                        }
+                    row_has_moneda = any(
+                        "MONEDA" in t.text.upper() for t in tokens if abs(t.bbox[0] - ymin) <= 16 and t is not tok
+                    )
+                    if row_has_moneda:
+                        return {"ymin": int(ymin), "xmin": int(xmin), "ymax": int(ymax), "xmax": int(xmax)}
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name == "CURRENCY":
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if "MONEDA" in t_up or "SOLES" in t_up or "DOLARES" in t_up or val_upper in t_up:
+                    ymin, xmin, ymax, xmax = tok.bbox
+                    if "FECHA" in t_up and "MONEDA" in t_up:
+                        return {
+                            "ymin": int(ymin),
+                            "xmin": xmin + int((xmax - xmin) * 0.51),
+                            "ymax": int(ymax),
+                            "xmax": int(xmax),
+                        }
+                    row_has_fecha = any(
+                        "FECHA" in t.text.upper() for t in tokens if abs(t.bbox[0] - ymin) <= 16 and t is not tok
+                    )
+                    if row_has_fecha:
+                        return {"ymin": int(ymin), "xmin": int(xmin), "ymax": int(ymax), "xmax": int(xmax)}
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name == "SUBTOTAL":
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if any(k in t_up for k in ["SUBTOTAL", "OP. GRAVADA", "VALOR VENTA"]):
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name == "TAX_AMOUNT":
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if any(k in t_up for k in ["IGV", "I.G.V", "18%", "IMPUESTO"]):
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name in ("TOTAL_AMOUNT", "AMOUNT"):
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if "SUBTOTAL" in t_up or tok.bbox[0] < 280:
+                    continue
+                if any(k in t_up for k in ["TOTAL FACTURA", "TOTAL A PAGAR", "IMPORTE TOTAL", "TRANSFERIDO", "MONTO", "TOTAL:"]):
+                    return self._merge_row_bbox(tok, tokens)
+
+        if field_name in ("ORIGIN_ADDRESS", "DESTINATION_ADDRESS", "SOURCE_ACCOUNT", "DESTINATION_ACCOUNT"):
+            label_map = {
+                "ORIGIN_ADDRESS": ["PUNTO DE PARTIDA", "ORIGEN"],
+                "DESTINATION_ADDRESS": ["PUNTO DE LLEGADA", "DESTINO"],
+                "SOURCE_ACCOUNT": ["CUENTA ORIGEN", "ORIGEN", "DEBITO"],
+                "DESTINATION_ACCOUNT": ["CUENTA DESTINO", "BENEFICIARIO", "DESTINO", "CREDITO"],
+            }[field_name]
+            for tok in tokens:
+                t_up = tok.text.upper()
+                if any(k in t_up for k in label_map) or (len(val_upper) >= 5 and val_upper[:10] in t_up):
+                    return self._merge_row_bbox(tok, tokens)
+
+        # Fallback: direct substring match
+        for tok in tokens:
+            if val_upper in tok.text.upper():
+                ymin, xmin, ymax, xmax = tok.bbox
+                return {"ymin": int(ymin), "xmin": int(xmin), "ymax": int(ymax), "xmax": int(xmax)}
+
+        return None
+
+    def _save_invoice_extractions(
+        self, db: Session, doc_id: uuid.UUID, inv: InvoiceExtraction, tokens=None
+    ) -> None:
         fields = [
             ("SUPPLIER_RUC", inv.supplier_ruc),
             ("SUPPLIER_NAME", inv.supplier_name),
@@ -239,7 +376,19 @@ class PipelineService:
             ("TOTAL_AMOUNT", str(inv.total_amount)),
         ]
         for name, val in fields:
-            db.add(DBExtraction(document_id=doc_id, field_name=name, field_value=val, confidence=1.0))
+            bbox_dict = self._resolve_field_bbox(name, val, tokens or [])
+            db.add(
+                DBExtraction(
+                    document_id=doc_id,
+                    field_name=name,
+                    field_value=val,
+                    confidence=1.0,
+                    bbox_ymin=bbox_dict["ymin"] if bbox_dict else None,
+                    bbox_xmin=bbox_dict["xmin"] if bbox_dict else None,
+                    bbox_ymax=bbox_dict["ymax"] if bbox_dict else None,
+                    bbox_xmax=bbox_dict["xmax"] if bbox_dict else None,
+                )
+            )
 
         for item in inv.line_items:
             bbox_dict = item.bbox.model_dump() if item.bbox else None
@@ -255,7 +404,9 @@ class PipelineService:
                 )
             )
 
-    def _save_guide_extractions(self, db: Session, doc_id: uuid.UUID, guide: ShippingGuideExtraction) -> None:
+    def _save_guide_extractions(
+        self, db: Session, doc_id: uuid.UUID, guide: ShippingGuideExtraction, tokens=None
+    ) -> None:
         fields = [
             ("GUIDE_NUMBER", guide.guide_number),
             ("SENDER_RUC", guide.sender_ruc),
@@ -265,7 +416,19 @@ class PipelineService:
             ("DESTINATION_ADDRESS", guide.destination_address or ""),
         ]
         for name, val in fields:
-            db.add(DBExtraction(document_id=doc_id, field_name=name, field_value=val, confidence=1.0))
+            bbox_dict = self._resolve_field_bbox(name, val, tokens or [])
+            db.add(
+                DBExtraction(
+                    document_id=doc_id,
+                    field_name=name,
+                    field_value=val,
+                    confidence=1.0,
+                    bbox_ymin=bbox_dict["ymin"] if bbox_dict else None,
+                    bbox_xmin=bbox_dict["xmin"] if bbox_dict else None,
+                    bbox_ymax=bbox_dict["ymax"] if bbox_dict else None,
+                    bbox_xmax=bbox_dict["xmax"] if bbox_dict else None,
+                )
+            )
 
         for item in guide.items:
             bbox_dict = item.bbox.model_dump() if item.bbox else None
@@ -280,7 +443,9 @@ class PipelineService:
                 )
             )
 
-    def _save_voucher_extractions(self, db: Session, doc_id: uuid.UUID, voucher: PaymentVoucherExtraction) -> None:
+    def _save_voucher_extractions(
+        self, db: Session, doc_id: uuid.UUID, voucher: PaymentVoucherExtraction, tokens=None
+    ) -> None:
         fields = [
             ("BANK_NAME", voucher.bank_name),
             ("OPERATION_NUMBER", voucher.operation_number),
@@ -291,4 +456,16 @@ class PipelineService:
             ("DESTINATION_ACCOUNT", voucher.destination_account or ""),
         ]
         for name, val in fields:
-            db.add(DBExtraction(document_id=doc_id, field_name=name, field_value=val, confidence=1.0))
+            bbox_dict = self._resolve_field_bbox(name, val, tokens or [])
+            db.add(
+                DBExtraction(
+                    document_id=doc_id,
+                    field_name=name,
+                    field_value=val,
+                    confidence=1.0,
+                    bbox_ymin=bbox_dict["ymin"] if bbox_dict else None,
+                    bbox_xmin=bbox_dict["xmin"] if bbox_dict else None,
+                    bbox_ymax=bbox_dict["ymax"] if bbox_dict else None,
+                    bbox_xmax=bbox_dict["xmax"] if bbox_dict else None,
+                )
+            )
