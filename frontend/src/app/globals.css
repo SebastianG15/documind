@@ -2,32 +2,388 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+html {
+  container-type: scroll-state;
+}
+
 :root {
-  --background: #0b0f19;
-  --foreground: #f3f4f6;
+  color-scheme: dark;
+  /* Institutional Obsidian Black & Warm Amber Gold Palette */
+  --background: #09090b;
+  --surface-primary: #111114;
+  --surface-elevated: #18181c;
+  --surface-interactive: #222228;
+  --foreground: #f4f4f5;
+  --foreground-muted: #a1a1aa;
+  --color-accent: #f59e0b;
+  --color-accent-strong: #d97706;
+  --color-accent-contrast: #09090b;
+  --color-emerald: #10b981;
+  --color-rose: #f43f5e;
+  --ui-border: #27272a;
+  --ui-border-strong: #3f3f46;
+
+  /* Standard scrollbar tokens (>= 3:1 contrast ratio against track) */
+  --scrollbar-thumb: #3f3f46;
+  --scrollbar-track: #111114;
+
+  /* Perceptual color-space interpolation tokens */
+  --in-oklab: ;
+  --in-oklch: ;
+
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+    --in-oklch: in oklch;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --ui-border: CanvasText;
+    --color-accent: Highlight;
+  }
+}
+
+:target {
+  scroll-margin-top: 4rem;
+}
+
+/* Native Modal Dialog with Smooth Animation & Containment */
+dialog:modal {
+  overscroll-behavior: contain;
+  background-color: var(--surface-primary);
+  color: var(--foreground);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 0.875rem;
+  padding: 0;
+  max-inline-size: min(92vw, 38rem);
+  inline-size: 100%;
+  box-shadow: 0 24px 50px -12px rgba(0, 0, 0, 0.8);
+  animation: modal-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  animation: backdrop-enter 0.2s ease-out forwards;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Compact persistent top bar */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background-color: color-mix(in oklab, var(--background) 92%, transparent);
+  border-block-end: 1px solid var(--ui-border);
+  backdrop-filter: blur(12px);
+}
+
+.scroller {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  text-align: start;
+  overflow-wrap: break-word;
 }
 
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+h1,
+h2,
+h3,
+th {
+  text-wrap: balance;
 }
 
-::-webkit-scrollbar-track {
-  background: #111827;
+p {
+  text-wrap: pretty;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+.fluid-page-title {
+  font-size: clamp(1.35rem, 1.05rem + 1.2vw, 2.15rem);
+  line-height: 1.2;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+.surface-card {
+  background-color: var(--surface-primary);
+  border: 1px solid var(--ui-border);
+  border-radius: 0.75rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.surface-card:hover {
+  border-color: #38383e;
+}
+
+.accent-button {
+  background-color: var(--color-accent);
+  color: var(--color-accent-contrast);
+  transition: background-color 0.15s ease, transform 0.1s ease, filter 0.15s ease;
+}
+
+.accent-button:hover:not(:disabled) {
+  background-color: #fbbf24;
+  filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.35));
+}
+
+/* Accessible current page indicator in Navbar */
+.nav-link {
+  position: relative;
+  min-block-size: 2.125rem;
+  padding-inline: 0.75rem;
+  padding-block: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.5rem;
+  color: var(--foreground-muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--foreground);
+  background-color: var(--surface-elevated);
+}
+
+.nav-link[aria-current="page"] {
+  color: var(--foreground);
+  background-color: var(--surface-interactive);
+}
+
+.nav-link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0.5rem;
+  inset-block-end: 0;
+  border-block-end: 2px solid var(--color-accent);
+}
+
+/* Accessible Tablist & Tabs */
+.tablist-scroller {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scroll-snap-type: inline proximity;
+  scrollbar-width: none;
+  padding: 0.2rem;
+}
+
+[role="tab"] {
+  position: relative;
+  flex: none;
+  scroll-snap-align: start;
+  min-block-size: 2.125rem;
+  padding-inline: 0.75rem;
+  padding-block: 0.35rem;
+  border-radius: 0.45rem;
+  color: var(--foreground-muted);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+[role="tab"]:hover:not(:disabled) {
+  color: var(--foreground);
+  background-color: var(--surface-elevated);
+}
+
+[role="tab"][aria-selected="true"] {
+  color: var(--foreground);
+  background-color: var(--surface-interactive);
+}
+
+[role="tab"][aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0.45rem 0;
+  border-block-end: 2.5px solid var(--color-accent);
+}
+
+/* Responsive Data Table with Container Queries, Sticky Headers & Row Transitions */
+.table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(560px, 75vh);
+  container-type: inline-size;
+  border-radius: 0.625rem;
+  border: 1px solid var(--ui-border);
+  background-color: var(--surface-primary);
+}
+
+.responsive-data-table {
+  inline-size: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.responsive-data-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  background-color: var(--surface-elevated);
+}
+
+.responsive-data-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background-color: var(--surface-primary);
+  font-weight: 500;
+  transition: background-color 0.15s ease;
+}
+
+.responsive-data-table tbody tr {
+  transition: background-color 0.15s ease;
+  position: relative;
+}
+
+.responsive-data-table tbody tr:hover {
+  background-color: rgba(39, 39, 42, 0.45);
+}
+
+.responsive-data-table tbody tr:hover th {
+  background-color: rgba(39, 39, 42, 0.45);
+}
+
+@container (width < 520px) {
+  .responsive-data-table,
+  .responsive-data-table thead,
+  .responsive-data-table tbody,
+  .responsive-data-table tr,
+  .responsive-data-table th,
+  .responsive-data-table td {
+    display: block;
+  }
+
+  .responsive-data-table thead {
+    display: none;
+  }
+
+  .responsive-data-table tbody tr {
+    margin-block-end: 0.65rem;
+    border: 1px solid var(--ui-border);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    background-color: var(--surface-elevated);
+  }
+
+  .responsive-data-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background-color: var(--surface-interactive);
+    border-radius: 0.375rem;
+    padding: 0.45rem 0.65rem;
+    margin-block-end: 0.35rem;
+  }
+
+  .responsive-data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.65rem;
+    text-align: end;
+  }
+
+  .responsive-data-table td:nth-child(2)::before {
+    content: var(--label-2, "Cant.") ": ";
+    color: var(--foreground-muted);
+    font-weight: 600;
+  }
+
+  .responsive-data-table td:nth-child(3)::before {
+    content: var(--label-3, "P. Unit") ": ";
+    color: var(--foreground-muted);
+    font-weight: 600;
+  }
+
+  .responsive-data-table td:nth-child(4)::before {
+    content: var(--label-4, "Total") ": ";
+    color: var(--foreground-muted);
+    font-weight: 600;
+  }
+}
+
+/* Discrepancy Alert Glow */
+.discrepancy-pulse {
+  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: rgba(244, 63, 94, 0.3);
+  }
+  50% {
+    border-color: rgba(244, 63, 94, 0.7);
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  dialog:modal,
+  dialog::backdrop,
+  .discrepancy-pulse {
+    animation: none !important;
+  }
 }

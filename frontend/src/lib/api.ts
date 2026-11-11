@@ -1,6 +1,16 @@
-import { DossierDetailResponse, DossierUploadResponse, SearchResponse } from "./types";
+import { DossierDetailResponse, DossierSummaryItem, DossierUploadResponse, SearchResponse } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+export async function listDossiers(limit: number = 20): Promise<DossierSummaryItem[]> {
+  try {
+    const response = await fetch(`${API_BASE}/dossiers?limit=${limit}`, { cache: "no-store" });
+    if (!response.ok) return [];
+    return response.json();
+  } catch {
+    return [];
+  }
+}
 
 export async function uploadDossier(title: string, files: File[]): Promise<DossierUploadResponse> {
   const formData = new FormData();

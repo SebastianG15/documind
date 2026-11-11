@@ -14,8 +14,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className="dark">
-      <body className="min-h-screen bg-[#0b0f19] text-gray-100 flex flex-col antialiased">
+    <html lang="es">
+      <head>
+        <meta name="color-scheme" content="light dark" />
+      </head>
+      <body className="min-h-screen flex flex-col antialiased">
         <Navbar />
         <main className="flex-1">{children}</main>
       </body>

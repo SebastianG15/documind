@@ -63,6 +63,20 @@ export interface DossierUploadResponse {
   payment_matched: boolean;
 }
 
+export interface DossierSummaryItem {
+  id: string;
+  title: string;
+  status: "PENDING" | "RECONCILED" | "DISCREPANCY_FOUND";
+  created_at: string;
+  documents_count: number;
+  doc_types: string[];
+  math_valid: boolean;
+  goods_matched: boolean;
+  payment_matched: boolean;
+  summary: string;
+  discrepancies_count: number;
+}
+
 export interface SearchResultItem {
   page_id: string;
   document_id: string;
